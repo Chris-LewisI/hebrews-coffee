@@ -1,5 +1,42 @@
 {% extends "base.html" %}
 
+{% block head %}
+<style>
+.status-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.status-checkboxes .form-check {
+    margin-bottom: 0;
+}
+
+.status-checkboxes .form-check-label {
+    font-size: 0.875rem;
+    margin-left: 0.25rem;
+}
+
+.status-checkboxes .form-check-input:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.status-checkboxes .form-check-input:focus {
+    border-color: #86b7fe;
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+@media (max-width: 768px) {
+    .status-checkboxes {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-3">
     <!-- Search and Filter Controls -->
@@ -14,14 +51,33 @@
             </form>
         </div>
         <div class="col-12 col-md-6">
-            <form method="GET" class="d-flex">
+            <form method="GET" id="statusFilterForm">
                 <input type="hidden" name="search" value="{{ search }}">
-                <select name="status" class="form-select me-2" onchange="this.form.submit()">
-                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Orders</option>
-                    <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
-                    <option value="in_progress" {% if status_filter == 'in_progress' %}selected{% endif %}>In Progress</option>
-                    <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
-                </select>
+                <div class="d-flex align-items-center">
+                    <div class="status-checkboxes me-3">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" name="status" value="all" id="status_all" 
+                                   {% if 'all' in status_filters %}checked{% endif %} onchange="updateStatusFilter()">
+                            <label class="form-check-label" for="status_all">All</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" name="status" value="pending" id="status_pending" 
+                                   {% if 'pending' in status_filters %}checked{% endif %} onchange="updateStatusFilter()">
+                            <label class="form-check-label" for="status_pending">Pending</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" name="status" value="in_progress" id="status_in_progress" 
+                                   {% if 'in_progress' in status_filters %}checked{% endif %} onchange="updateStatusFilter()">
+                            <label class="form-check-label" for="status_in_progress">In Progress</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" name="status" value="completed" id="status_completed" 
+                                   {% if 'completed' in status_filters %}checked{% endif %} onchange="updateStatusFilter()">
+                            <label class="form-check-label" for="status_completed">Completed</label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary btn-sm">Apply</button>
+                </div>
             </form>
         </div>
     </div>
@@ -111,6 +167,31 @@ function getCookie(name) {
         }
     }
     return cookieValue;
+}
+
+function updateStatusFilter() {
+    const allCheckbox = document.getElementById('status_all');
+    const pendingCheckbox = document.getElementById('status_pending');
+    const inProgressCheckbox = document.getElementById('status_in_progress');
+    const completedCheckbox = document.getElementById('status_completed');
+    
+    // If "All" is checked, uncheck other options
+    if (allCheckbox.checked) {
+        pendingCheckbox.checked = false;
+        inProgressCheckbox.checked = false;
+        completedCheckbox.checked = false;
+    } else {
+        // If other options are checked, uncheck "All"
+        if (pendingCheckbox.checked || inProgressCheckbox.checked || completedCheckbox.checked) {
+            allCheckbox.checked = false;
+        }
+        
+        // If no options are checked, default to pending and in_progress
+        if (!pendingCheckbox.checked && !inProgressCheckbox.checked && !completedCheckbox.checked) {
+            pendingCheckbox.checked = true;
+            inProgressCheckbox.checked = true;
+        }
+    }
 }
 
 function updateStatus(orderId, newStatus) {

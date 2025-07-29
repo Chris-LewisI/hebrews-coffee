@@ -10,6 +10,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 from dotenv import load_dotenv
+from security_utils import InputValidator, require_valid_id, SecureDatabase
 
 app = Flask(__name__)
 
@@ -17,7 +18,11 @@ load_dotenv()
 
 app.secret_key = os.getenv('FLASK_SECRET_KEY')
 
-DATABASE = '/app/db.sqlite3'  # Adjust this path as needed
+# Database path - use environment variable or default based on environment
+if os.path.exists('/app'):  # Running in Docker container
+    DATABASE = os.getenv('DATABASE_PATH', '/app/db.sqlite3')
+else:  # Running locally
+    DATABASE = os.getenv('DATABASE_PATH', 'db.sqlite3')
 
 # ---------- Hardcoded Users (for demonstration) ----------
 username = os.getenv('APP_USERNAME', 'admin')  # default to 'admin' if not set
@@ -45,79 +50,95 @@ def close_connection(exception):
         db.close()
 
 def create_tables():
-    db = sqlite3.connect(DATABASE)
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            customer_name TEXT NOT NULL,
-            drink TEXT NOT NULL,
-            milk TEXT NOT NULL,
-            syrup TEXT,
-            foam TEXT,
-            temperature TEXT NOT NULL,
-            extra_shot INTEGER NOT NULL,
-            notes TEXT,
-            status TEXT NOT NULL,
-            price REAL NOT NULL,
-            created_at TEXT NOT NULL
-        )
-    """)
-    
-    # Add syrup and foam columns if they don't exist (for existing databases)
     try:
-        db.execute("ALTER TABLE orders ADD COLUMN syrup TEXT")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
-    
-    try:
-        db.execute("ALTER TABLE orders ADD COLUMN foam TEXT")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
-    
-    # Create menu configuration table
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS menu_config (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            item_type TEXT NOT NULL,
-            item_name TEXT NOT NULL,
-            price REAL,
-            created_at TEXT NOT NULL
-        )
-    """)
-    
-    # Insert default menu items if table is empty
-    existing_items = db.execute("SELECT COUNT(*) FROM menu_config").fetchone()[0]
-    if existing_items == 0:
-        default_items = [
-            ('drink', 'Latte', 4.0),
-            ('drink', 'Coffee', 3.0),
-            ('milk', 'Whole', None),
-            ('milk', 'Oat', None),
-            ('milk', 'Almond', None),
-            ('milk', 'None', None),
-            ('syrup', 'Vanilla', None),
-            ('syrup', 'Caramel', None),
-            ('syrup', 'Hazelnut', None),
-            ('syrup', 'None', None),
-            ('foam', 'Regular', None),
-            ('foam', 'Extra Foam', None),
-            ('foam', 'No Foam', None)
-        ]
-        for item_type, item_name, price in default_items:
-            db.execute(
-                "INSERT INTO menu_config (item_type, item_name, price, created_at) VALUES (?, ?, ?, datetime('now'))",
-                (item_type, item_name, price)
+        # Ensure the database file can be created
+        db_dir = os.path.dirname(DATABASE)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+        
+        # Create empty file if it doesn't exist
+        if not os.path.exists(DATABASE):
+            open(DATABASE, 'a').close()
+        
+        db = sqlite3.connect(DATABASE)
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer_name TEXT NOT NULL,
+                drink TEXT NOT NULL,
+                milk TEXT NOT NULL,
+                syrup TEXT,
+                foam TEXT,
+                temperature TEXT NOT NULL,
+                extra_shot INTEGER NOT NULL,
+                notes TEXT,
+                status TEXT NOT NULL,
+                price REAL NOT NULL,
+                created_at TEXT NOT NULL
             )
-    
-    db.commit()
-    db.close()
+        """)
+        
+        # Add syrup and foam columns if they don't exist (for existing databases)
+        try:
+            db.execute("ALTER TABLE orders ADD COLUMN syrup TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        try:
+            db.execute("ALTER TABLE orders ADD COLUMN foam TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        # Create menu configuration table
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS menu_config (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_type TEXT NOT NULL,
+                item_name TEXT NOT NULL,
+                price REAL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        
+        # Insert default menu items if table is empty
+        existing_items = db.execute("SELECT COUNT(*) FROM menu_config").fetchone()[0]
+        if existing_items == 0:
+            default_items = [
+                ('drink', 'Latte', 4.0),
+                ('drink', 'Coffee', 3.0),
+                ('milk', 'Whole', None),
+                ('milk', 'Oat', None),
+                ('milk', 'Almond', None),
+                ('milk', 'None', None),
+                ('syrup', 'Vanilla', None),
+                ('syrup', 'Caramel', None),
+                ('syrup', 'Hazelnut', None),
+                ('syrup', 'None', None),
+                ('foam', 'Regular', None),
+                ('foam', 'Extra Foam', None),
+                ('foam', 'No Foam', None)
+            ]
+            for item_type, item_name, price in default_items:
+                db.execute(
+                    "INSERT INTO menu_config (item_type, item_name, price, created_at) VALUES (?, ?, ?, datetime('now'))",
+                    (item_type, item_name, price)
+                )
+        
+        db.commit()
+        db.close()
+        
+    except Exception as e:
+        print(f"Error creating database tables: {e}")
+        raise
 
 # Initialize database tables on app startup
 def init_db():
     """Initialize database tables if they don't exist"""
     try:
-        # Ensure the directory exists
-        os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
+        # Ensure the directory exists (only if DATABASE has a directory component)
+        db_dir = os.path.dirname(DATABASE)
+        if db_dir:  # Only create directory if there is one
+            os.makedirs(db_dir, exist_ok=True)
         create_tables()
         print("Database initialized successfully")
     except Exception as e:
@@ -185,6 +206,7 @@ def in_progress_orders():
 @app.route('/order', methods=['POST'])
 @login_required
 def order():
+    # Validate and sanitize all inputs
     customer_name = request.form['customer_name']
     drink = request.form['drink']
     milk = request.form.get('milk')
@@ -193,6 +215,31 @@ def order():
     temperature = request.form.get('temperature')
     notes = request.form.get('notes', '')
     extra_shot = request.form.get('extra_shot') == 'true'
+
+    # Validate customer name
+    is_valid, sanitized_name, error = InputValidator.validate_customer_name(customer_name)
+    if not is_valid:
+        flash(f"Invalid customer name: {error}")
+        return redirect(url_for('index'))
+    
+    # Validate menu items (drink, milk, syrup, foam)
+    for item_name, item_type in [(drink, 'drink'), (milk, 'milk'), (syrup, 'syrup'), (foam, 'foam')]:
+        if item_name:  # Only validate if not None/empty
+            is_valid, _, error = InputValidator.validate_menu_item(item_name)
+            if not is_valid:
+                flash(f"Invalid {item_type}: {error}")
+                return redirect(url_for('index'))
+    
+    # Validate temperature
+    if temperature and temperature not in ['Hot', 'Iced']:
+        flash("Invalid temperature selection")
+        return redirect(url_for('index'))
+    
+    # Validate notes
+    is_valid, sanitized_notes, error = InputValidator.validate_notes(notes)
+    if not is_valid:
+        flash(f"Invalid notes: {error}")
+        return redirect(url_for('index'))
 
     db = get_db()
     
@@ -212,7 +259,7 @@ def order():
         (customer_name, drink, milk, syrup, foam, temperature, extra_shot, notes, status, price, created_at) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now"))
         ''',
-        (customer_name, drink, milk, syrup, foam, temperature, int(extra_shot), notes, 'pending', price)
+        (sanitized_name, drink, milk, syrup, foam, temperature, int(extra_shot), sanitized_notes, 'pending', price)
     )
     db.commit()
     return redirect(url_for('index'))
@@ -222,9 +269,32 @@ def order():
 def orders():
     db = get_db()
     search = request.args.get('search', '')
-    status_filter = request.args.get('status', 'all')
+    # Handle multiple status values - default to pending and in_progress
+    status_filters = request.args.getlist('status')
+    if not status_filters:
+        status_filters = ['pending', 'in_progress']
     
-    query = '''
+    # Validate search input
+    if search:
+        is_valid, sanitized_search, error = InputValidator.validate_search_query(search)
+        if not is_valid:
+            flash(f"Invalid search query: {error}")
+            return redirect(url_for('orders'))
+        search = sanitized_search
+    
+    # Validate status filters
+    validated_statuses = []
+    for status in status_filters:
+        if status == 'all':
+            validated_statuses = ['all']
+            break
+        is_valid, validated_status, error = InputValidator.validate_status(status)
+        if not is_valid:
+            flash(f"Invalid status filter: {error}")
+            return redirect(url_for('orders'))
+        validated_statuses.append(validated_status)
+    
+    base_query = '''
         SELECT *, 
                CASE 
                    WHEN status = 'pending' THEN (julianday('now') - julianday(created_at)) * 24 * 60
@@ -234,18 +304,16 @@ def orders():
         FROM orders 
         WHERE 1=1
     '''
-    params = []
     
-    if search:
-        query += ' AND (customer_name LIKE ? OR drink LIKE ? OR notes LIKE ?)'
-        search_param = f'%{search}%'
-        params.extend([search_param, search_param, search_param])
+    additional_params = []
     
-    if status_filter != 'all':
-        query += ' AND status = ?'
-        params.append(status_filter)
+    # Add status filter if specified
+    if 'all' not in validated_statuses:
+        placeholders = ','.join(['?' for _ in validated_statuses])
+        base_query += f' AND status IN ({placeholders})'
+        additional_params.extend(validated_statuses)
     
-    query += '''
+    base_query += '''
         ORDER BY 
             CASE status
                 WHEN "pending" THEN 1
@@ -255,28 +323,55 @@ def orders():
             created_at DESC
     '''
     
-    orders = db.execute(query, params).fetchall()
-    return render_template('orders.html', orders=orders, search=search, status_filter=status_filter)
+    # Use secure search if search term provided
+    if search:
+        # Replace placeholder with actual LIKE conditions
+        search_query = base_query.replace('WHERE 1=1', 'WHERE ({{LIKE_CONDITIONS}})')
+        if 'all' not in validated_statuses:
+            placeholders = ','.join(['?' for _ in validated_statuses])
+            search_query = search_query.replace(f'AND status IN ({placeholders})', f'AND status IN ({placeholders})')
+        
+        try:
+            orders = SecureDatabase.safe_like_query(
+                db, 
+                search_query, 
+                ['customer_name', 'drink', 'notes'], 
+                search, 
+                additional_params
+            )
+        except ValueError as e:
+            flash(str(e))
+            return redirect(url_for('orders'))
+    else:
+        orders = db.execute(base_query, additional_params).fetchall()
+    
+    return render_template('orders.html', orders=orders, search=search, status_filters=validated_statuses)
 
 @app.route('/delete_order/<int:order_id>', methods=['POST'])
 @login_required
+@require_valid_id
 def delete_order(order_id):
     db = get_db()
     db.execute('DELETE FROM orders WHERE id = ?', [order_id])
     db.commit()
-    return redirect(request.referrer or url_for('default_route'))
+    return redirect(request.referrer or url_for('index'))
 
 @app.route('/update_status/<int:order_id>', methods=['POST'])
 @login_required
+@require_valid_id
 def update_status(order_id):
     new_status = request.form.get('status')
-    if new_status not in ['pending', 'in_progress', 'completed']:
-        return 'Invalid status', 400
+    
+    # Validate status using our security utilities
+    is_valid, validated_status, error = InputValidator.validate_status(new_status)
+    if not is_valid:
+        flash(f"Invalid status: {error}")
+        return redirect(request.referrer or url_for('index'))
         
     db = get_db()
-    db.execute('UPDATE orders SET status = ? WHERE id = ?', [new_status, order_id])
+    db.execute('UPDATE orders SET status = ? WHERE id = ?', [validated_status, order_id])
     db.commit()
-    return redirect(request.referrer or url_for('default_route'))
+    return redirect(request.referrer or url_for('index'))
 
 @app.route('/completed')
 @login_required
@@ -449,27 +544,35 @@ def create_label(order_id):
 # ---------- Menu Management Routes ----------
 @app.route('/update_menu_item/<int:item_id>', methods=['POST'])
 @login_required
+@require_valid_id
 def update_menu_item(item_id):
     item_name = request.form.get('item_name')
     price = request.form.get('price')
     
-    if not item_name:
-        return 'Item name is required', 400
+    # Validate item name
+    is_valid, sanitized_name, error = InputValidator.validate_menu_item(item_name)
+    if not is_valid:
+        flash(f"Invalid item name: {error}")
+        return redirect(request.referrer or url_for('index'))
+    
+    # Validate price if provided
+    if price and price.strip():
+        is_valid, validated_price, error = InputValidator.validate_price(price)
+        if not is_valid:
+            flash(f"Invalid price: {error}")
+            return redirect(request.referrer or url_for('index'))
+        price = validated_price
     
     db = get_db()
-    if price and price.strip():
-        try:
-            price_float = float(price)
-            db.execute('UPDATE menu_config SET item_name = ?, price = ? WHERE id = ?', 
-                      (item_name, price_float, item_id))
-        except ValueError:
-            return 'Invalid price format', 400
+    if price is not None:
+        db.execute('UPDATE menu_config SET item_name = ?, price = ? WHERE id = ?', 
+                  (sanitized_name, price, item_id))
     else:
         db.execute('UPDATE menu_config SET item_name = ? WHERE id = ?', 
-                  (item_name, item_id))
+                  (sanitized_name, item_id))
     
     db.commit()
-    return redirect(request.referrer or url_for('default_route'))
+    return redirect(request.referrer or url_for('index'))
 
 @app.route('/add_menu_item', methods=['POST'])
 @login_required
@@ -478,38 +581,43 @@ def add_menu_item():
     item_name = request.form.get('item_name')
     price = request.form.get('price')
     
-    if not item_type or not item_name:
-        return 'Item type and name are required', 400
+    # Validate item type
+    is_valid, validated_type, error = InputValidator.validate_item_type(item_type)
+    if not is_valid:
+        flash(f"Invalid item type: {error}")
+        return redirect(request.referrer or url_for('index'))
     
-    if item_type not in ['drink', 'milk', 'syrup', 'foam']:
-        return 'Invalid item type', 400
+    # Validate item name
+    is_valid, sanitized_name, error = InputValidator.validate_menu_item(item_name)
+    if not is_valid:
+        flash(f"Invalid item name: {error}")
+        return redirect(request.referrer or url_for('index'))
+    
+    # Validate price if provided
+    validated_price = None
+    if price and price.strip():
+        is_valid, validated_price, error = InputValidator.validate_price(price)
+        if not is_valid:
+            flash(f"Invalid price: {error}")
+            return redirect(request.referrer or url_for('index'))
     
     db = get_db()
-    if price and price.strip():
-        try:
-            price_float = float(price)
-            db.execute(
-                'INSERT INTO menu_config (item_type, item_name, price, created_at) VALUES (?, ?, ?, datetime("now"))',
-                (item_type, item_name, price_float)
-            )
-        except ValueError:
-            return 'Invalid price format', 400
-    else:
-        db.execute(
-            'INSERT INTO menu_config (item_type, item_name, price, created_at) VALUES (?, ?, ?, datetime("now"))',
-            (item_type, item_name, None)
-        )
+    db.execute(
+        'INSERT INTO menu_config (item_type, item_name, price, created_at) VALUES (?, ?, ?, datetime("now"))',
+        (validated_type, sanitized_name, validated_price)
+    )
     
     db.commit()
-    return redirect(request.referrer or url_for('default_route'))
+    return redirect(request.referrer or url_for('index'))
 
 @app.route('/delete_menu_item/<int:item_id>', methods=['POST'])
 @login_required
+@require_valid_id
 def delete_menu_item(item_id):
     db = get_db()
     db.execute('DELETE FROM menu_config WHERE id = ?', (item_id,))
     db.commit()
-    return redirect(request.referrer or url_for('default_route'))
+    return redirect(request.referrer or url_for('index'))
 
 # ---------- API Routes ----------
 @app.route('/api/order-count')
@@ -542,11 +650,24 @@ def api_customers():
 @app.route('/api/customer-history/<customer_name>')
 @login_required
 def api_customer_history(customer_name):
+    # Validate and sanitize customer name from URL
+    is_valid, sanitized_name, error = InputValidator.validate_customer_name(customer_name)
+    if not is_valid:
+        return {'error': f'Invalid customer name: {error}'}, 400
+    
     db = get_db()
-    orders = db.execute(
-        'SELECT * FROM orders WHERE customer_name LIKE ? ORDER BY created_at DESC LIMIT 10',
-        (f'%{customer_name}%',)
-    ).fetchall()
+    
+    # Use secure LIKE query with proper escaping
+    try:
+        orders = SecureDatabase.safe_like_query(
+            db,
+            'SELECT * FROM orders WHERE {{LIKE_CONDITIONS}} ORDER BY created_at DESC LIMIT 10',
+            ['customer_name'],
+            sanitized_name,
+            []
+        )
+    except ValueError as e:
+        return {'error': str(e)}, 400
     
     return {
         'orders': [dict(order) for order in orders],
