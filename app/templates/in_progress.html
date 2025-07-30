@@ -20,7 +20,7 @@
         </div>
 
         <div class="d-flex gap-2">
-          <a href="{{ url_for('create_label', order_id=order.id) }}" target="_blank" class="btn btn-warning btn-sm">Create Label</a>
+          <button onclick="printLabel({{ order.id }})" class="btn btn-warning btn-sm">Print Label</button>
           <form action="{{ url_for('update_status', order_id=order.id) }}" method="post" style="margin: 0;">
             <input type="hidden" name="status" value="completed">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

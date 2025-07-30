@@ -166,14 +166,28 @@ class CustomerAutocomplete {
     showHistoryNotification(orderCount) {
         const notification = document.createElement('div');
         notification.className = 'alert alert-info alert-dismissible fade show';
-        notification.innerHTML = `
-            <small>
-                <strong>Returning customer!</strong> 
-                Found ${orderCount} previous order${orderCount > 1 ? 's' : ''}. 
-                Form pre-filled with last order preferences.
-            </small>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
+        
+        // Create elements safely without innerHTML
+        const small = document.createElement('small');
+        const strong = document.createElement('strong');
+        strong.textContent = 'Returning customer!';
+        
+        small.appendChild(strong);
+        small.appendChild(document.createTextNode(' Found '));
+        small.appendChild(document.createTextNode(orderCount.toString()));
+        small.appendChild(document.createTextNode(' previous order'));
+        if (orderCount > 1) {
+            small.appendChild(document.createTextNode('s'));
+        }
+        small.appendChild(document.createTextNode('. Form pre-filled with last order preferences.'));
+        
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'btn-close';
+        closeButton.setAttribute('data-bs-dismiss', 'alert');
+        
+        notification.appendChild(small);
+        notification.appendChild(closeButton);
         
         // Insert after the customer name input
         this.customerInput.parentNode.insertAdjacentElement('afterend', notification);
