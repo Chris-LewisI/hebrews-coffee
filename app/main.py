@@ -534,12 +534,14 @@ def create_label(order_id):
     c.save()
     buffer.seek(0)
 
-    return send_file(
+    response = make_response(send_file(
         buffer,
         as_attachment=False,
         mimetype='application/pdf',
         download_name=f'label_{order_id}.pdf'
-    )
+    ))
+    response.headers['X-Auto-Print'] = 'true'
+    return response
 
 # ---------- Menu Management Routes ----------
 @app.route('/update_menu_item/<int:item_id>', methods=['POST'])
@@ -678,4 +680,4 @@ def api_customer_history(customer_name):
 # ---------- Entry Point ----------
 if __name__ == "__main__":
     create_tables()
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=4001)
