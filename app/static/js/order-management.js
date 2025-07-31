@@ -3,13 +3,21 @@ class OrderManager {
     constructor() {
         this.lastOrderCount = 0;
         this.soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
+        this.unsubscribe = null;
         this.init();
     }
 
     init() {
         this.createSoundToggle();
-        this.checkForNewOrders();
-        setInterval(() => this.checkForNewOrders(), 5000);
+        
+        // Use the unified real-time system if available
+        if (window.realTimeManager) {
+            this.setupRealTimeNotifications();
+        } else {
+            // Fallback to old polling method
+            this.checkForNewOrders();
+            setInterval(() => this.checkForNewOrders(), 5000);
+        }
     }
 
     createSoundToggle() {
@@ -53,17 +61,34 @@ class OrderManager {
         oscillator.stop(audioContext.currentTime + 0.5);
     }
 
+    setupRealTimeNotifications() {
+        // Subscribe to real-time order count updates
+        this.unsubscribe = window.realTimeManager.subscribe('orderCounts',
+            (data) => this.handleOrderCountUpdate(data),
+            {
+                endpoint: '/api/order-count',
+                interval: 8000, // Less frequent polling for just counts
+                transform: (data) => data.counts || data // Handle both formats
+            }
+        );
+    }
+
+    handleOrderCountUpdate(data) {
+        // Check for new orders and trigger notifications
+        if (this.lastOrderCount > 0 && data.pending > this.lastOrderCount) {
+            this.playNotificationSound();
+            this.showNotification('New order received!');
+        }
+        this.lastOrderCount = data.pending;
+        this.updateOrderBadges(data);
+    }
+
     async checkForNewOrders() {
         try {
             const response = await fetch('/api/order-count');
             if (response.ok) {
                 const data = await response.json();
-                if (this.lastOrderCount > 0 && data.pending > this.lastOrderCount) {
-                    this.playNotificationSound();
-                    this.showNotification('New order received!');
-                }
-                this.lastOrderCount = data.pending;
-                this.updateOrderBadges(data);
+                this.handleOrderCountUpdate(data);
             }
         } catch (error) {
             console.error('Error checking for new orders:', error);
@@ -103,12 +128,20 @@ class OrderManager {
             if (link.textContent.includes('Current Orders')) {
                 const badge = link.querySelector('.badge') || document.createElement('span');
                 badge.className = 'badge bg-primary ms-1';
-                badge.textContent = data.pending + data.in_progress;
+                const activeCount = data.pending + data.in_progress;
+                badge.textContent = activeCount;
+                badge.style.display = activeCount > 0 ? 'inline' : 'none';
                 if (!link.querySelector('.badge')) {
                     link.appendChild(badge);
                 }
             }
         });
+    }
+
+    cleanup() {
+        if (this.unsubscribe) {
+            this.unsubscribe();
+        }
     }
 }
 
@@ -123,16 +156,16 @@ style.textContent = `
         from { transform: translateX(0); opacity: 1; }
         to { transform: translateX(100%); opacity: 0; }
     }
+    .wait-time-warning {
+        background-color: #ffc107 !important; 
+        color: #212529 !important; 
+        border-color: #ffc107 !important;
+    }
     .wait-time-urgent { 
         background-color: #dc3545 !important; 
         color: white !important; 
         font-weight: bold;
-        animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.7; }
-        100% { opacity: 1; }
+        border-color: #dc3545 !important;
     }
 `;
 document.head.appendChild(style);
@@ -140,4 +173,11 @@ document.head.appendChild(style);
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.orderManager = new OrderManager();
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (window.orderManager) {
+        window.orderManager.cleanup();
+    }
 });

@@ -1,4 +1,6 @@
 from flask import Flask, g, render_template, request, redirect, url_for, Response, make_response, send_file, session, flash, jsonify
+import time
+import hashlib
 from flask_wtf.csrf import CSRFProtect, generate_csrf
 import sqlite3
 import csv
@@ -20,7 +22,7 @@ app.secret_key = os.getenv('FLASK_SECRET_KEY')
 
 # Database path - use environment variable or default based on environment
 if os.path.exists('/app'):  # Running in Docker container
-    DATABASE = os.getenv('DATABASE_PATH', '/app/db.sqlite3')
+    DATABASE = os.getenv('DATABASE_PATH', '/app/data/db.sqlite3')
 else:  # Running locally
     DATABASE = os.getenv('DATABASE_PATH', 'db.sqlite3')
 
@@ -100,6 +102,17 @@ def create_tables():
             )
         """)
         
+        # Create settings table for wait time thresholds
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setting_key TEXT NOT NULL UNIQUE,
+                setting_value TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+        
         # Insert default menu items if table is empty
         existing_items = db.execute("SELECT COUNT(*) FROM menu_config").fetchone()[0]
         if existing_items == 0:
@@ -124,6 +137,24 @@ def create_tables():
                     (item_type, item_name, price)
                 )
         
+        # Insert default wait time settings if they don't exist
+        default_settings = [
+            ('wait_time_yellow_threshold', '5'),  # Yellow after 5 minutes
+            ('wait_time_red_threshold', '10'),    # Red after 10 minutes
+        ]
+        
+        for setting_key, setting_value in default_settings:
+            existing_setting = db.execute(
+                "SELECT COUNT(*) FROM settings WHERE setting_key = ?", 
+                (setting_key,)
+            ).fetchone()[0]
+            
+            if existing_setting == 0:
+                db.execute(
+                    "INSERT INTO settings (setting_key, setting_value, created_at, updated_at) VALUES (?, ?, datetime('now'), datetime('now'))",
+                    (setting_key, setting_value)
+                )
+        
         db.commit()
         db.close()
         
@@ -146,6 +177,33 @@ def init_db():
 
 # Initialize database when app starts
 init_db()
+
+# ---------- Settings Helpers ----------
+def get_wait_time_thresholds():
+    """Get current wait time thresholds from database"""
+    db = get_db()
+    yellow_threshold = db.execute(
+        "SELECT setting_value FROM settings WHERE setting_key = 'wait_time_yellow_threshold'"
+    ).fetchone()
+    red_threshold = db.execute(
+        "SELECT setting_value FROM settings WHERE setting_key = 'wait_time_red_threshold'"
+    ).fetchone()
+    
+    return {
+        'yellow': int(yellow_threshold[0]) if yellow_threshold else 5,
+        'red': int(red_threshold[0]) if red_threshold else 10
+    }
+
+def update_wait_time_threshold(threshold_type, value):
+    """Update a wait time threshold setting"""
+    db = get_db()
+    setting_key = f'wait_time_{threshold_type}_threshold'
+    
+    db.execute(
+        "UPDATE settings SET setting_value = ?, updated_at = datetime('now') WHERE setting_key = ?",
+        (str(value), setting_key)
+    )
+    db.commit()
 
 # ---------- Login Helpers ----------
 def login_required(f):
@@ -392,10 +450,26 @@ def update_status(order_id):
 @login_required
 def completed_orders():
     db = get_db()
-    completed = db.execute('SELECT * FROM orders WHERE status = "completed" ORDER BY created_at DESC').fetchall()
+    completed = db.execute('''
+        SELECT *, 
+               (julianday(datetime('now')) - julianday(created_at)) * 24 * 60 as total_time_minutes
+        FROM orders 
+        WHERE status = "completed" 
+        ORDER BY created_at DESC
+    ''').fetchall()
 
     total_drinks = len(completed)
     total_money = sum(o['price'] for o in completed)
+    
+    # Calculate average wait time (assuming orders take average 3 minutes to complete after being started)
+    # This is an estimation since we don't track exact completion times
+    wait_times = []
+    for order in completed:
+        # Estimate wait time as total time minus processing time (rough estimate)
+        estimated_wait = max(0, order['total_time_minutes'] - 3)  # Assume 3 min processing time
+        wait_times.append(estimated_wait)
+    
+    avg_wait_time = sum(wait_times) / len(wait_times) if wait_times else 0
     
     # Calculate drink counts dynamically
     drink_counts = {}
@@ -451,6 +525,9 @@ def completed_orders():
     total_lattes = drink_counts.get('Latte', 0)
     total_coffees = drink_counts.get('Coffee', 0)
 
+    # Get wait time thresholds for the settings modal
+    wait_time_thresholds = get_wait_time_thresholds()
+
     return render_template(
         'completed.html',
         completed=completed,
@@ -466,10 +543,12 @@ def completed_orders():
         customer_counts=customer_counts,
         total_extra_shots=total_extra_shots,
         avg_order_value=avg_order_value,
+        avg_wait_time=avg_wait_time,
         most_popular_drink=most_popular_drink,
         most_popular_milk=most_popular_milk,
         most_popular_syrup=most_popular_syrup,
-        top_customers=top_customers
+        top_customers=top_customers,
+        wait_time_thresholds=wait_time_thresholds
     )
 
 @app.route('/export_completed_csv')
@@ -636,6 +715,42 @@ def delete_menu_item(item_id):
     db.commit()
     return redirect(request.referrer or url_for('index'))
 
+# ---------- Settings Routes ----------
+@app.route('/api/wait-time-thresholds')
+@login_required
+def api_get_wait_time_thresholds():
+    """Get current wait time thresholds"""
+    thresholds = get_wait_time_thresholds()
+    return jsonify(thresholds)
+
+@app.route('/api/wait-time-thresholds', methods=['POST'])
+@login_required
+def api_update_wait_time_thresholds():
+    """Update wait time thresholds"""
+    try:
+        data = request.get_json()
+        yellow_threshold = data.get('yellow_threshold')
+        red_threshold = data.get('red_threshold')
+        
+        # Validate inputs
+        if not isinstance(yellow_threshold, int) or not isinstance(red_threshold, int):
+            return jsonify({'error': 'Thresholds must be integers'}), 400
+            
+        if yellow_threshold < 1 or red_threshold < 1:
+            return jsonify({'error': 'Thresholds must be positive'}), 400
+            
+        if yellow_threshold >= red_threshold:
+            return jsonify({'error': 'Yellow threshold must be less than red threshold'}), 400
+        
+        # Update settings
+        update_wait_time_threshold('yellow', yellow_threshold)
+        update_wait_time_threshold('red', red_threshold)
+        
+        return jsonify({'success': True, 'yellow': yellow_threshold, 'red': red_threshold})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # ---------- API Routes ----------
 @app.route('/api/order-count')
 @login_required
@@ -651,6 +766,181 @@ def api_order_count():
         'completed': completed,
         'total': pending + in_progress + completed
     }
+
+@app.route('/api/orders/live')
+@login_required
+def api_orders_live():
+    """Optimized endpoint that only returns changed orders since last check"""
+    since_timestamp = request.args.get('since', '0')
+    status_filter = request.args.get('status', 'active')  # active, all, pending, in_progress, completed
+    
+    db = get_db()
+    
+    # Convert timestamp to datetime string for SQLite
+    try:
+        since_time = float(since_timestamp)
+        since_datetime = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(since_time))
+    except (ValueError, TypeError):
+        since_datetime = '1970-01-01 00:00:00'
+    
+    # Build query based on status filter - Use parameterized queries for security
+    if status_filter == 'active':
+        status_condition = "status IN ('pending', 'in_progress')"
+        status_params = []
+    elif status_filter == 'all':
+        status_condition = "1=1"
+        status_params = []
+    else:
+        # Validate status filter to prevent SQL injection
+        valid_statuses = ['pending', 'in_progress', 'completed']
+        if status_filter not in valid_statuses:
+            status_filter = 'pending'
+        status_condition = "status = ?"
+        status_params = [status_filter]
+    
+    # Get orders modified since last check (including new orders and status changes)
+    query = f'''
+        SELECT *, 
+               CASE 
+                   WHEN status = 'pending' THEN (julianday('now') - julianday(created_at)) * 24 * 60
+                   WHEN status = 'in_progress' THEN (julianday('now') - julianday(created_at)) * 24 * 60
+                   ELSE 0
+               END as wait_time_minutes,
+               datetime(created_at) as created_at_formatted
+        FROM orders 
+        WHERE {status_condition}
+        ORDER BY 
+            CASE status
+                WHEN "pending" THEN 1
+                WHEN "in_progress" THEN 2
+                WHEN "completed" THEN 3
+            END,
+            created_at DESC
+    '''
+    
+    orders = db.execute(query, status_params).fetchall()
+    
+    # Get current counts
+    counts = {
+        'pending': db.execute('SELECT COUNT(*) FROM orders WHERE status = "pending"').fetchone()[0],
+        'in_progress': db.execute('SELECT COUNT(*) FROM orders WHERE status = "in_progress"').fetchone()[0],
+        'completed': db.execute('SELECT COUNT(*) FROM orders WHERE status = "completed"').fetchone()[0]
+    }
+    counts['total'] = counts['pending'] + counts['in_progress'] + counts['completed']
+    
+    # Convert orders to dict and calculate hash for change detection
+    orders_data = []
+    for order in orders:
+        order_dict = dict(order)  # Convert Row to dict
+        # Ensure all values are JSON serializable
+        order_dict['wait_time_minutes'] = round(float(order_dict['wait_time_minutes']), 1) if order_dict['wait_time_minutes'] else 0
+        order_dict['extra_shot'] = bool(order_dict['extra_shot'])
+        order_dict['price'] = float(order_dict['price']) if order_dict['price'] else 0.0
+        # Remove the created_at_formatted field as it's redundant
+        if 'created_at_formatted' in order_dict:
+            del order_dict['created_at_formatted']
+        orders_data.append(order_dict)
+    
+    # Create hash of current data for client-side change detection
+    data_string = str(orders_data) + str(counts)
+    data_hash = hashlib.md5(data_string.encode()).hexdigest()
+    
+    current_timestamp = time.time()
+    
+    response_data = {
+        'orders': orders_data,
+        'counts': counts,
+        'timestamp': current_timestamp,
+        'hash': data_hash,
+        'has_changes': True  # Client will determine this based on hash comparison
+    }
+    
+    # Add ETag for HTTP caching
+    response = make_response(jsonify(response_data))
+    response.headers['ETag'] = data_hash
+    response.headers['Cache-Control'] = 'no-cache'
+    
+    # Check if client sent If-None-Match header
+    if request.headers.get('If-None-Match') == data_hash:
+        return '', 304  # Not Modified
+    
+    return response
+
+@app.route('/api/debug/orders')
+@login_required
+def api_debug_orders():
+    """Debug endpoint to check if basic orders query works"""
+    db = get_db()
+    try:
+        orders = db.execute('SELECT * FROM orders LIMIT 10').fetchall()
+        orders_data = [dict(order) for order in orders]
+        return jsonify({
+            'success': True,
+            'count': len(orders_data),
+            'orders': orders_data
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/orders/pending')
+@login_required
+def api_orders_pending():
+    """Get only pending and in-progress orders for the main display"""
+    db = get_db()
+    
+    try:
+        orders = db.execute('''
+            SELECT *, 
+                   CASE 
+                       WHEN status = 'pending' THEN (julianday('now') - julianday(created_at)) * 24 * 60
+                       WHEN status = 'in_progress' THEN (julianday('now') - julianday(created_at)) * 24 * 60
+                       ELSE 0
+                   END as wait_time_minutes
+            FROM orders 
+            WHERE status IN ('pending', 'in_progress')
+            ORDER BY 
+                CASE status
+                    WHEN "pending" THEN 1
+                    WHEN "in_progress" THEN 2
+                END,
+                id ASC
+        ''').fetchall()
+        
+        orders_data = []
+        stable_data_for_hash = []  # Data without constantly changing fields
+        
+        for order in orders:
+            order_dict = dict(order)  # Convert Row to dict
+            # Ensure all values are JSON serializable
+            order_dict['wait_time_minutes'] = round(float(order_dict['wait_time_minutes']), 1) if order_dict['wait_time_minutes'] else 0
+            order_dict['extra_shot'] = bool(order_dict['extra_shot'])
+            order_dict['price'] = float(order_dict['price']) if order_dict['price'] else 0.0
+            orders_data.append(order_dict)
+            
+            # Create stable data for hash (exclude constantly changing fields)
+            stable_dict = {k: v for k, v in order_dict.items() 
+                          if k not in ['wait_time_minutes', 'created_at_formatted']}
+            stable_data_for_hash.append(stable_dict)
+        
+        # Create hash only from stable data (so minor wait time changes don't trigger updates)
+        data_hash = hashlib.md5(str(stable_data_for_hash).encode()).hexdigest()
+        
+        return jsonify({
+            'orders': orders_data,
+            'timestamp': time.time(),
+            'hash': data_hash
+        })
+    except Exception as e:
+        print(f"Error in api_orders_pending: {e}")
+        return jsonify({
+            'orders': [],
+            'timestamp': time.time(),
+            'hash': 'error',
+            'error': str(e)
+        }), 500
 
 @app.route('/api/customers')
 @login_required
@@ -695,4 +985,4 @@ def api_customer_history(customer_name):
 # ---------- Entry Point ----------
 if __name__ == "__main__":
     create_tables()
-    app.run(host='0.0.0.0', port=4001)
+    app.run(host='0.0.0.0', port=5000)
