@@ -1,21 +1,145 @@
 /* styles.css */
 
-.pending-orders {
-    border: 2px solid green;
+/* Modern Order Form Styles */
+.order-header h1 {
+    font-weight: 700;
+    font-size: 2.5rem;
+}
+
+.order-form-card {
+    border: none;
+    border-radius: 1rem;
+    overflow: hidden;
+}
+
+.order-form-card .card-body {
+    padding: 2rem;
+}
+
+.form-section {
+    position: relative;
+}
+
+.section-title {
+    color: #495057;
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e9ecef;
+    display: flex;
+    align-items: center;
+}
+
+.section-icon {
+    font-size: 1.2rem;
+    margin-right: 0.5rem;
+}
+
+.form-label.fw-medium {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.input-group-text {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+    color: #6c757d;
+}
+
+.input-group-text.border-end-0 {
+    border-right: none;
+}
+
+.form-control.border-start-0,
+.form-select.border-start-0 {
+    border-left: none;
+    padding-left: 0.75rem;
+}
+
+.form-control:focus.border-start-0,
+.form-select:focus.border-start-0 {
+    border-left: none;
+    box-shadow: none;
+}
+
+.input-group:focus-within .input-group-text.border-end-0 {
+    border-color: #86b7fe;
+    background-color: #e7f1ff;
+}
+
+.extra-shot-card {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    border: 1px solid #f1c40f;
+    border-radius: 0.75rem;
     padding: 1rem;
-    margin-top: 1.5rem;
-    border-radius: 0.5rem;
-    background-color: #e6ffe6; /* light green background */
+    transition: all 0.3s ease;
+}
+
+.extra-shot-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(241, 196, 15, 0.2);
+}
+
+.extra-icon {
+    font-size: 1.1rem;
+    margin-right: 0.5rem;
+}
+
+.form-check-input:checked {
+    background-color: #f39c12;
+    border-color: #f39c12;
+}
+
+.btn-primary.btn-lg {
+    font-weight: 600;
+    border-radius: 0.75rem;
+    padding: 0.75rem 2rem;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    border: none;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+    transition: all 0.3s ease;
+}
+
+.btn-primary.btn-lg:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+}
+
+.pending-orders-card {
+    border: none;
+    border-radius: 1rem;
+    overflow: hidden;
+}
+
+.pending-orders-card .card-header {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    border-bottom: none;
+    padding: 1rem 1.5rem;
+}
+
+.pending-orders {
+    min-height: 200px;
 }
 
 .pending-orders .list-group-item {
     font-size: 1.2rem;
     font-weight: 600;
     padding: 1rem 1.5rem;
-    background-color: #ccffcc;
-    border-radius: 0.4rem;
-    margin-bottom: 0.5rem;
-    color: #005500;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 0.75rem;
+    margin-bottom: 0.75rem;
+    color: #495057;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.pending-orders .list-group-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .completed-orders {
@@ -171,6 +295,43 @@
 
 /* Mobile-friendly styles */
 @media (max-width: 768px) {
+    /* Order Form Mobile Styles */
+    .order-header h1 {
+        font-size: 2rem;
+    }
+    
+    .order-form-card .card-body {
+        padding: 1.5rem;
+    }
+    
+    .section-title {
+        font-size: 1rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .section-icon {
+        font-size: 1rem;
+    }
+    
+    .form-label.fw-medium {
+        font-size: 0.9rem;
+    }
+    
+    .input-group-text {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+    }
+    
+    .extra-shot-card {
+        padding: 0.75rem;
+    }
+    
+    .btn-primary.btn-lg {
+        padding: 0.75rem 1.5rem;
+        font-size: 1rem;
+    }
+    
+    /* Table styles for mobile */
     .table-responsive {
         font-size: 0.875rem;
     }
@@ -233,7 +394,58 @@
 }
 
 @media (max-width: 576px) {
-    /* Extra small screens - hide even more columns */
+    /* Order Form Extra Small Screens */
+    .order-header h1 {
+        font-size: 1.75rem;
+    }
+    
+    .order-header .d-flex {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 1rem;
+    }
+    
+    .order-form-card .card-body {
+        padding: 1rem;
+    }
+    
+    .section-title {
+        font-size: 0.95rem;
+        padding-bottom: 0.35rem;
+    }
+    
+    .form-label.fw-medium {
+        font-size: 0.85rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .input-group-text {
+        padding: 0.5rem 0.6rem;
+        font-size: 0.8rem;
+    }
+    
+    .form-control,
+    .form-select {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+    }
+    
+    .extra-shot-card {
+        padding: 0.6rem;
+        margin-bottom: 1rem;
+    }
+    
+    .btn-primary.btn-lg {
+        padding: 0.6rem 1.25rem;
+        font-size: 0.95rem;
+    }
+    
+    /* Stack form sections vertically */
+    .row.g-3 > [class*="col-"] {
+        margin-bottom: 1rem;
+    }
+    
+    /* Table styles for extra small screens */
     .table th:nth-child(4), /* Milk */
     .table td:nth-child(4),
     .table th:nth-child(7), /* Temperature */
@@ -259,6 +471,133 @@
     .table td {
         padding: 0.25rem 0.125rem;
         font-size: 0.75rem;
+    }
+}
+
+/* Order Success Modal Styles */
+.order-success-modal .modal-content {
+    border: none;
+    border-radius: 1rem;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+.order-success-modal .modal-header {
+    border-bottom: none;
+    padding: 1.5rem 1.5rem 1rem;
+}
+
+.order-success-modal .modal-body {
+    padding: 1rem 2rem;
+}
+
+.order-success-modal .modal-footer {
+    border-top: none;
+    padding: 1rem 2rem 2rem;
+}
+
+.order-success-content .success-icon {
+    animation: bounceIn 0.6s ease-out;
+}
+
+.order-success-content .order-customer-name {
+    color: #495057;
+    font-weight: 700;
+    font-size: 1.5rem;
+}
+
+.order-success-content .order-drink-info {
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+.price-display {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-radius: 0.75rem;
+    padding: 1rem 1.5rem;
+    display: inline-block;
+    min-width: 200px;
+}
+
+.price-label {
+    display: block;
+    font-size: 0.9rem;
+    color: #6c757d;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.price-amount {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #007bff;
+}
+
+.order-success-modal #printLabelBtn {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    border: none;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    transition: all 0.3s ease;
+}
+
+.order-success-modal #printLabelBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+    background: linear-gradient(135deg, #20c997 0%, #17a2b8 100%);
+}
+
+/* Animation for the success icon */
+@keyframes bounceIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+    70% {
+        transform: scale(0.9);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Mobile responsive styles for modal */
+@media (max-width: 576px) {
+    .order-success-modal .modal-body {
+        padding: 1rem;
+    }
+    
+    .order-success-modal .modal-footer {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .order-success-modal .modal-footer .btn {
+        width: 100%;
+        margin: 0;
+    }
+    
+    .price-display {
+        min-width: auto;
+        width: 100%;
+        max-width: 250px;
+    }
+    
+    .order-success-content .order-customer-name {
+        font-size: 1.25rem;
+    }
+    
+    .price-amount {
+        font-size: 1.75rem;
     }
 }
 

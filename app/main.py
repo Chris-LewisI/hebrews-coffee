@@ -1,4 +1,4 @@
-from flask import Flask, g, render_template, request, redirect, url_for, Response, make_response, send_file, session, flash
+from flask import Flask, g, render_template, request, redirect, url_for, Response, make_response, send_file, session, flash, jsonify
 from flask_wtf.csrf import CSRFProtect, generate_csrf
 import sqlite3
 import csv
@@ -253,7 +253,7 @@ def order():
     if extra_shot:
         price += 1.0
 
-    db.execute(
+    cursor = db.execute(
         '''
         INSERT INTO orders 
         (customer_name, drink, milk, syrup, foam, temperature, extra_shot, notes, status, price, created_at) 
@@ -262,6 +262,21 @@ def order():
         (sanitized_name, drink, milk, syrup, foam, temperature, int(extra_shot), sanitized_notes, 'pending', price)
     )
     db.commit()
+    
+    # Get the newly created order ID
+    order_id = cursor.lastrowid
+    
+    # Check if this is an AJAX request
+    if request.headers.get('Accept') == 'application/json' or request.form.get('ajax') == 'true':
+        return jsonify({
+            'success': True,
+            'order_id': order_id,
+            'customer_name': sanitized_name,
+            'drink': drink,
+            'price': price,
+            'extra_shot': extra_shot
+        })
+    
     return redirect(url_for('index'))
 
 @app.route('/orders')
