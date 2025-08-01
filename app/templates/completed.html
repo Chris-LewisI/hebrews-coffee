@@ -87,6 +87,28 @@
     </div>
   </div>
 
+  <!-- Additional Metrics Row -->
+  <div class="row mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card text-center">
+        <div class="card-body">
+          <h5 class="card-title text-secondary">{{ "%.1f"|format(avg_wait_time) }}m</h5>
+          <p class="card-text small">Avg Wait Time</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card text-center">
+        <div class="card-body">
+          <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#waitTimeSettingsModal">
+            ⚙️ Settings
+          </button>
+          <p class="card-text small mt-1">Wait Time Alerts</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Detailed Analytics -->
   <div class="row">
     <div class="col-lg-6 mb-4">
@@ -178,6 +200,55 @@
   <button type="submit" class="btn btn-outline-primary">Export to CSV</button>
 </form>
 
+<!-- Wait Time Settings Modal -->
+<div class="modal fade" id="waitTimeSettingsModal" tabindex="-1" aria-labelledby="waitTimeSettingsModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="waitTimeSettingsModalLabel">Wait Time Alert Settings</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="waitTimeSettingsForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          
+          <div class="mb-3">
+            <label for="yellowThreshold" class="form-label">
+              <span class="badge bg-warning text-dark me-2">Yellow Alert</span>
+              Threshold (minutes)
+            </label>
+            <input type="number" class="form-control" id="yellowThreshold" name="yellow_threshold" 
+                   min="1" max="30" value="{{ wait_time_thresholds.yellow }}" required>
+            <div class="form-text">Orders will show in yellow when wait time exceeds this many minutes</div>
+          </div>
+          
+          <div class="mb-3">
+            <label for="redThreshold" class="form-label">
+              <span class="badge bg-danger me-2">Red Alert</span>
+              Threshold (minutes)
+            </label>
+            <input type="number" class="form-control" id="redThreshold" name="red_threshold" 
+                   min="1" max="60" value="{{ wait_time_thresholds.red }}" required>
+            <div class="form-text">Orders will show in red when wait time exceeds this many minutes</div>
+          </div>
+          
+          <div class="alert alert-info">
+            <small>
+              <strong>Current Settings:</strong><br>
+              🟡 Yellow at {{ wait_time_thresholds.yellow }} minutes<br>
+              🔴 Red at {{ wait_time_thresholds.red }} minutes
+            </small>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveWaitTimeSettings()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
   window.chartData = {
@@ -185,6 +256,63 @@
     totalCoffees: {{ total_coffees | tojson }},
     drinkCounts: {{ drink_counts | tojson }}
   };
+
+  // Wait time settings management
+  async function saveWaitTimeSettings() {
+    const form = document.getElementById('waitTimeSettingsForm');
+    const formData = new FormData(form);
+    
+    // Convert FormData to JSON
+    const data = {
+      yellow_threshold: parseInt(formData.get('yellow_threshold')),
+      red_threshold: parseInt(formData.get('red_threshold'))
+    };
+    
+    try {
+      const response = await fetch('/api/wait-time-thresholds', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': formData.get('csrf_token')
+        },
+        body: JSON.stringify(data)
+      });
+      
+      if (response.ok) {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('waitTimeSettingsModal'));
+        modal.hide();
+        
+        // Show success message
+        showNotification('Wait time settings updated successfully!', 'success');
+        
+        // Refresh page to show updated values
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        showNotification('Failed to update settings', 'danger');
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      showNotification('Error saving settings', 'danger');
+    }
+  }
+  
+  function showNotification(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} position-fixed`;
+    toast.style.cssText = `
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      min-width: 300px;
+    `;
+    toast.textContent = message;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.remove();
+    }, 3000);
+  }
 </script>
 <script src="{{ url_for('static', filename='js/chart.js') }}"></script>
 {% endblock %}

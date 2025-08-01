@@ -6,7 +6,7 @@ services:
     ports:
       - "8001:5000"
     volumes:
-      - ./app/db.sqlite3:/app/db.sqlite3
+      - ./data:/app/data
     restart: unless-stopped
     environment:
       - FLASK_SECRET_KEY
