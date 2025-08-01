@@ -1,61 +1,44 @@
-# Environment files
-.env
-.env.local
-.env.prod
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Database files
-*.sqlite3
-*db.sqlite3
-*.db
-app/db.sqlite3
-app/data/
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-# Logs
-logs/
-*.log
+*dev.db
+# testing
+/coverage
 
-# SSL certificates
-ssl/
-*.pem
-*.key
-*.crt
+# next.js
+/.next/
+/out/
 
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
+# production
+/build
 
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS files
+# misc
 .DS_Store
-Thumbs.db
+*.pem
 
-# Docker
-.dockerignore
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Backup files
-backup-*.tar.gz
-*.backup
+# env files (can opt-in for committing if needed)
+.env*
 
-# Storybook files
-.storybook/
-storybook-static/
-*.stories.js
-*.stories.ts
-*.stories.jsx
-*.stories.tsx
-sb-*
-chromatic-*
+# vercel
+.vercel
 
-# Cloudflare tunnel credentials
-.cloudflared/
-*.json
-cloudflared.log
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+/src/generated/prisma

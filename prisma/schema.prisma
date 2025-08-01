@@ -1,0 +1,98 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Order {
+  id           String   @id @default(cuid())
+  orderNumber  Int      @unique @default(autoincrement()) @map("order_number") 
+  customerName String   @map("customer_name")
+  drink        String
+  milk         String
+  syrup        String?
+  foam         String?
+  temperature  String
+  extraShots   Int      @default(0) @map("extra_shots")
+  notes        String?
+  status       OrderStatus @default(PENDING)
+  price        Float    @default(0.0)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("orders")
+}
+
+model MenuConfig {
+  id        String   @id @default(cuid())
+  itemType  MenuItemType @map("item_type")
+  itemName  String   @map("item_name")
+  price     Float?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("menu_config")
+}
+
+model Settings {
+  id           String   @id @default(cuid())
+  settingKey   String   @unique @map("setting_key")
+  settingValue String   @map("setting_value")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+model InventoryCost {
+  id        String   @id @default(cuid())
+  itemName  String   @map("item_name")
+  category  InventoryCategory
+  unitCost  Float    @map("unit_cost")  // Cost per unit (e.g., per shot, per ml, etc.)
+  unit      String   // Unit of measurement (shots, ml, oz, etc.)
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("inventory_costs")
+}
+
+enum OrderStatus {
+  PENDING     @map("pending")
+  IN_PROGRESS @map("in_progress")
+  COMPLETED   @map("completed")
+}
+
+enum MenuItemType {
+  DRINK       @map("drink")
+  MILK        @map("milk")
+  SYRUP       @map("syrup")
+  FOAM        @map("foam")
+  TEMPERATURE @map("temperature")
+}
+
+enum InventoryCategory {
+  COFFEE_BEANS  @map("coffee_beans")
+  MILK          @map("milk")
+  SYRUP         @map("syrup")
+  EQUIPMENT     @map("equipment")
+  SUPPLIES      @map("supplies")
+  LABOR         @map("labor")
+  OTHER         @map("other")
+}

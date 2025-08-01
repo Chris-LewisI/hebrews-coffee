@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+/* Force light mode with proper contrast */
+:root {
+  --background: #ffffff;
+  --foreground: #111827; /* Dark gray for better contrast */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Remove dark mode to prevent text visibility issues */
+/* @media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+} */
+
+body {
+  background: #f9fafb; /* Light gray background */
+  color: #111827; /* Dark text for better contrast */
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Ensure all text elements have proper contrast */
+.text-gray-600 {
+  color: #4b5563 !important; /* Darker gray for better readability */
+}
+
+.text-gray-500 {
+  color: #6b7280 !important; /* Slightly darker */
+}
+
+.text-gray-700 {
+  color: #374151 !important; /* Much darker */
+}
+
+.text-gray-900 {
+  color: #111827 !important; /* Very dark for headings */
+}
+
+/* Fix any light text that might be hard to read */
+h1, h2, h3, h4, h5, h6 {
+  color: #111827 !important;
+  font-weight: 600;
+}
+
+p, span, div {
+  color: #374151;
+}
+
+/* Ensure form elements are readable */
+input, select, textarea {
+  color: #111827 !important;
+  background-color: #ffffff !important;
+}
+
+/* Fix navigation and other UI elements */
+.nav-link {
+  color: #374151 !important;
+}
+
+.nav-link:hover {
+  color: #111827 !important;
+}
+
+/* Scrollbar styling for better UX */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #f59e0b #f3f4f6;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #f59e0b;
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #d97706;
+}
+
+/* Scroll indicators - container wrapper */
+.scroll-container {
+  position: relative;
+}
+
+.scroll-fade-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(transparent, rgba(255, 255, 255, 0.95));
+  pointer-events: none;
+  border-radius: 0 0 8px 8px;
+  z-index: 10;
+}
